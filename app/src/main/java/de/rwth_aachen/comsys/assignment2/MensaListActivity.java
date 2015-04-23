@@ -2,7 +2,7 @@ package de.rwth_aachen.comsys.assignment2;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v4.app.FragmentActivity;
+import android.app.Activity;
 
 
 /**
@@ -21,7 +21,7 @@ import android.support.v4.app.FragmentActivity;
  * {@link MensaListFragment.Callbacks} interface
  * to listen for item selections.
  */
-public class MensaListActivity extends FragmentActivity
+public class MensaListActivity extends Activity
         implements MensaListFragment.Callbacks {
 
     /**
@@ -44,7 +44,7 @@ public class MensaListActivity extends FragmentActivity
 
             // In two-pane mode, list items should be given the
             // 'activated' state when touched.
-            ((MensaListFragment) getSupportFragmentManager()
+            ((MensaListFragment) getFragmentManager()
                     .findFragmentById(R.id.mensa_list))
                     .setActivateOnItemClick(true);
         }
@@ -66,7 +66,7 @@ public class MensaListActivity extends FragmentActivity
             arguments.putString(MensaDetailFragment.ARG_ITEM_ID, id);
             MensaDetailFragment fragment = new MensaDetailFragment();
             fragment.setArguments(arguments);
-            getSupportFragmentManager().beginTransaction()
+            getFragmentManager().beginTransaction()
                     .replace(R.id.mensa_detail_container, fragment)
                     .commit();
 

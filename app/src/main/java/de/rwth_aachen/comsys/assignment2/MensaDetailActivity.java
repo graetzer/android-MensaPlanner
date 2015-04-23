@@ -1,8 +1,8 @@
 package de.rwth_aachen.comsys.assignment2;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v7.app.ActionBarActivity;
 import android.support.v4.app.NavUtils;
 import android.view.MenuItem;
 
@@ -16,7 +16,7 @@ import android.view.MenuItem;
  * This activity is mostly just a 'shell' activity containing nothing
  * more than a {@link MensaDetailFragment}.
  */
-public class MensaDetailActivity extends ActionBarActivity {
+public class MensaDetailActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,7 +24,7 @@ public class MensaDetailActivity extends ActionBarActivity {
         setContentView(R.layout.activity_mensa_detail);
 
         // Show the Up button in the action bar.
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getActionBar().setDisplayHomeAsUpEnabled(true);
 
         // savedInstanceState is non-null when there is fragment state
         // saved from previous configurations of this activity
@@ -43,7 +43,7 @@ public class MensaDetailActivity extends ActionBarActivity {
                     getIntent().getStringExtra(MensaDetailFragment.ARG_ITEM_ID));
             MensaDetailFragment fragment = new MensaDetailFragment();
             fragment.setArguments(arguments);
-            getSupportFragmentManager().beginTransaction()
+            getFragmentManager().beginTransaction()
                     .add(R.id.mensa_detail_container, fragment)
                     .commit();
         }
