@@ -150,7 +150,7 @@ public class MealPlan {
     }
 
     static {
-        //System.loadLibrary("hello"); // Load native library at runtime
+        //System.loadLibrary("HttpClient"); // Load native library at runtime
     }
     private native byte[] requestUrl(String host, String path);
 
