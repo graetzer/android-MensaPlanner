@@ -150,9 +150,9 @@ public class MealPlan {
     }
 
     static {
-        //System.loadLibrary("HttpClient"); // Load native library at runtime
+        System.loadLibrary("HttpClient"); // Load native library at runtime
     }
-    private native byte[] requestUrl(String host, String path);
+    private native byte[] requestUrl(String serverhost, String path);
 
     private String capitalize(final String line) {
         return Character.toUpperCase(line.charAt(0)) + line.substring(1);
