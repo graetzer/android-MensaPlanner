@@ -9,29 +9,38 @@
 #include <stdout.h>
 #include <unistd.h>
 #include <string.h>
+#import <zlib.h>
 
+/* // Gzip deflate, maybe look for something in c
+    z_stream strm;
 
-enum PacketTypes {
-	JOKER_REQUEST_TYPE = 1, /// packet type for joke-requests (see joker_request)
-	JOKER_RESPONSE_TYPE = 2 /// packet type for joke-responses (see joker_response)
-};
+    strm.zalloc = Z_NULL; strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL; strm.total_out = 0;
+    strm.next_in=(Bytef *)[self bytes]; strm.avail_in = [self length];
 
-const uint32_t MAX_JOKE_LENGTH = 1024; /// maximum accepted length of jokes in joker_response packets
+    // Compresssion Levels: // Z_NO_COMPRESSION // Z_BEST_SPEED // Z_BEST_COMPRESSION // Z_DEFAULT_COMPRESSION
 
-typedef struct {
-	uint8_t type; /// first byte in every joke packet, identifies the packet type (see PacketTypes)
-} __attribute__ ((__packed__)) joker_header;
+    if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, (15+16), 8, Z_DEFAULT_STRATEGY) != Z_OK) return nil;
 
-typedef struct {
-	joker_header header; /// packet header
-	uint8_t len_first_name; /// length of the first name
-	uint8_t len_last_name; /// length of the last name
-} __attribute__ ((__packed__)) joker_request;
+    NSMutableData *compressed = [NSMutableData dataWithLength:16384]; // 16K chunks for expansion
 
-typedef struct {
-	joker_header header; /// packet header
-	uint32_t len_joke; // length of the joke
-} __attribute__ ((__packed__)) joker_response;
+    do {
+        if (strm.total_out >= [compressed length])
+            [compressed increaseLengthBy: 16384];
+
+        strm.next_out = [compressed mutableBytes] + strm.total_out;
+        strm.avail_out = [compressed length] - strm.total_out;
+
+        deflate(&strm, Z_FINISH);
+
+    } while (strm.avail_out == 0);
+
+    deflateEnd(&strm);
+
+    [compressed setLength: strm.total_out];
+    return [NSData dataWithData:compressed]; }
+
+*/
 
 /** @brief Resolves the given hostname/port combination
  *  @param server hostname to resolve
@@ -121,33 +130,57 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *host, const char *host, const
 	return result;
 }
 
+/**
+* Find a line ending CRLF
+*/
+ssize_t FindLineEnding(void* data, size_t len) {
+    size_t i = 0;
+    while(i+1 < len) {
+        if (data[i] == '\r' && data[i+1] == '\n') return i;
+        i+=2;
+    }
+    return -1;
+}
+
 /** @brief Receives a http response using the given socket and prints it to stdout
  *  @param socket descriptor
  *  @param response Pointer to the variable which will get the response buffer. Needs to be free()'d afterwards
  *  @return 0 on success, -1 on failure
  */
-ssize_t ReceiveResponse(int fd, void **response) {
-	const size_t responseLen = sizeof(joker_response); // response length excluding joke
-	size_t allowedLen = responseLen, // maximum number bytes to receive
-		   receivedLen = 0; // number of bytes received
+ssize_t ReceiveResponse(int fd, void **responseData) {
 
-	void *response = malloc(responseLen + MAX_JOKE_LENGTH); // allocate memory for response
+    ssize_t responseLen = 1024, responseRecv = 0,
+    parserOffset = 0, bodyOffset = 0, bodyLength = 0;
+	void *response = malloc(bodyLength);
+    if (!response) {
+        printf("error malloc");
+        return -1;
+    }
+    bool useGzip = false;
 
-	while(receivedLen < allowedLen) {// there are still bytes to receive
-		ssize_t status = recv(fd, (uint8_t*)response + receivedLen, allowedLen - receivedLen, 0);/
+	while(true) {// there are still bytes to receive
+		ssize_t status = recv(fd, (uint8_t*)response + responseRecv, responseLen - responseRecv, 0);
 
 		if(status == -1) {// print user-friendly message on error
 			free(response); // free memory
 			printf("recvfrom");
 			return -1;
-		}
-		else if(status == 0) { // print error message on connection close
-			free(response); // free memory
+		} else if(status == 0) { // print error message on connection close
+			//free(response); // free memory
 			printf("Connection closed by the server.\n");
-			return -1;
+
+            // TODO
+
+
+			break;
 		}
 
-		receivedLen += status; // status = received number of bytes
+		ssize_t lineEnd = FindLineEnding(response + parserOffset, responseRecv - parserOffset)-;
+		if (lineEnd != -1) {
+		    // TODO
+		}
+
+		responseRecv += status; // status = received number of bytes
 		if(receivedLen >= responseLen) {
 			uint32_t jokeLen = ntohl(response->len_joke);
 			if(jokeLen >= MAX_JOKE_LENGTH) {
@@ -165,13 +198,16 @@ ssize_t ReceiveResponse(int fd, void **response) {
 		}
 	}
 
-	// never writes out of bounds because we abort if jokeLen == MAX_JOKE_LENGTH
-	*((uint8_t*)response + allowedLen) = 0; // null-terminate response
+	if (useGzip) {
+	    // TODO
+	}
 
-	printf("%s\n", (const char*)response + responseLen); // print joke to stdout
+    if (responseReceived > 0) {
+        printf("%s\n", (const char*)response);
+    }
 
-	free(response); // free memory
-	return 0;
+	*responseData = response + bodyOffset;
+	return bodyReceived;
 }
 
 /*
