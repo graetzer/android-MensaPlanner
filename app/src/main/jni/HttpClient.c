@@ -9,38 +9,54 @@
 #include <stdout.h>
 #include <unistd.h>
 #include <string.h>
-#import <zlib.h>
+#include <zlib.h>
 
-/* // Gzip deflate, maybe look for something in c
-    z_stream strm;
+/** @brief Decrompress data compressed with gzip
+ *  @param inBuffer ingoing data
+ *  @param inLength size of ingoing data
+ *  @param outBuffer pointer to a variable which will get the result
+ *  @return Size of the output buffer. 0 in case of error
+ */
+size_t DecompressGzipBuffer(void *inData, size_t inLength, void** outBuffer) {
+    if (inLength == 0) return 0;
 
-    strm.zalloc = Z_NULL; strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL; strm.total_out = 0;
-    strm.next_in=(Bytef *)[self bytes]; strm.avail_in = [self length];
+    size_t bufferLength = inLength + inLength/2;
+    size_t buffer = malloc(bufferLength);
+    if (!buffer) return 0;
 
-    // Compresssion Levels: // Z_NO_COMPRESSION // Z_BEST_SPEED // Z_BEST_COMPRESSION // Z_DEFAULT_COMPRESSION
+    //NSMutableData *decompressed = [NSMutableData dataWithLength: ];
+    BOOL done = false; int status;
 
-    if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, (15+16), 8, Z_DEFAULT_STRATEGY) != Z_OK) return nil;
+    z_stream strm; strm.next_in = (Bytef *)inData; strm.avail_in = inLength;
+    strm.total_out = 0; strm.zalloc = Z_NULL; strm.zfree = Z_NULL;
 
-    NSMutableData *compressed = [NSMutableData dataWithLength:16384]; // 16K chunks for expansion
+    if (inflateInit2(&strm, (15+32)) != Z_OK)
+        return nil;
 
-    do {
-        if (strm.total_out >= [compressed length])
-            [compressed increaseLengthBy: 16384];
+    while (!done) { // Make sure we have enough room and reset the lengths.
+        if (strm.total_out >= bufferLength) {
+            bufferLength += inLength/2;
+            buffer = realloc(bufferLength, bufferLength);
+            if (!buffer) return 0;
+        }
+        strm.next_out = buffer + strm.total_out;
+        strm.avail_out = inLength - strm.total_out;
 
-        strm.next_out = [compressed mutableBytes] + strm.total_out;
-        strm.avail_out = [compressed length] - strm.total_out;
+        // Inflate another chunk.
+        status = inflate (&strm, Z_SYNC_FLUSH);
+        if (status == Z_STREAM_END)
+            done = true;
+        else if (status != Z_OK)
+            break;
+    }
+    if (inflateEnd (&strm) != Z_OK) return 0;
 
-        deflate(&strm, Z_FINISH);
-
-    } while (strm.avail_out == 0);
-
-    deflateEnd(&strm);
-
-    [compressed setLength: strm.total_out];
-    return [NSData dataWithData:compressed]; }
-
-*/
+        // Set real length.
+    if (done) {
+        *outBuffer = buffer;
+        return strm.total_out;
+    } else return 0;
+}
 
 /** @brief Resolves the given hostname/port combination
  *  @param server hostname to resolve
@@ -147,32 +163,30 @@ ssize_t FindLineEnding(void* data, size_t len) {
  *  @param responseBodyData Pointer to the variable which will get the response buffer. Needs to be free()'d afterwards
  *  @return 0 on success, -1 on failure
  */
-ssize_t ReceiveResponse(int fd, void **responseData) {
+ssize_t ReceiveResponse(int fd, char **responseData) {
+    ssize_t bufferLen = 4096, bytesRcvd = 0, parserOffset = 0, headerLength = 0, contentLength = 0;
+    bool usesGzip = false, headerReceived = false;
+    int status = 0;
 
-    ssize_t bufferLen = 4096, bytesRcvd = 0, parserOffset = 0, headerLength = 0;
 	char *buffer = (char *) malloc(bufferLen);
     if (!buffer) {
         printf("error malloc");
         return -1;
     }
-    bool usesGzip = false, headerReceived = false;
-    int status = 0;
 
-	while(true) {// there are still bytes to receive
+	while(!headerReceived || bytesRcvd < contentLength + headerLength) {
 		ssize_t status = recv(fd, (uint8_t*)buffer + bytesRcvd, bufferLen - bytesRcvd, 0);
 		if(status == -1) {// print user-friendly message on error
-			free(buffer); // free memory
-			printf("recv");
-			return -1;
+			printf("Error recv");
+			goto error_cleanup;
 		} else if(status == 0) { // print error message on connection close
-			//free(response); // free memory
 			printf("Connection closed by the server.\n");
-            // TODO
 			break;
 		}
 		bytesRcvd += status;
 		if (bufferLen - bytesRcvd < 512) {// Pretty arbitrary
-		    buffer = realloc(buffer, bufferLen + bytesRcvd/2);
+		    bufferLen += bytesRcvd/2;
+		    buffer = realloc(buffer, bufferLen);
 		}
 
         // Try to parse the header, pretty ugly
@@ -185,19 +199,16 @@ ssize_t ReceiveResponse(int fd, void **responseData) {
                 // Looking for: "HTTP/1.1 200 OK"
                 char *http = "HTTP/1.";
                 char *pch = strstr(buffer, http);// pointer to
-                if (!pch) break;// TODO should not happen
+                if (!pch) goto error_cleanup;// should not happen
 
-                // atoi should ignore whitespaces and characters after
+                // atoi should ignore whitespaces and characters after the status code
                 status = atoi(pch + sizeof(http)+1);
                 printf("Received status %d\n", status);
-                if (status != 200) {
-                    free(buffer); // free memory
-                    return -1;
-                }
+                if (status != 200) goto error_cleanup;
 
-            } else if (lineEnd + 4 < responseRecv// Check if this is the end of the header
+            } else if (lineEnd + 3 < responseRecv// Check if this is the end of the header
             && response[lineEnd + 2] == '\r' && response[lineEnd + 3] == '\n') {
-                headerLength = lineEnd + 4;
+                headerLength = lineEnd + 3 + 1;// lineEnd is a 0 based index
                 headerReceived = true;
             } else {
                 // Looking for something like "Content-Length: 1354"
@@ -207,9 +218,10 @@ ssize_t ReceiveResponse(int fd, void **responseData) {
 
                 // TODO Could there be leading whitespaces?
                 if (strcasecmp(buffer + parserOffset, "Content-Length") == 0) {
-                    int bodyLen = atoi(pch + 1);// should work?
-                    if (bufferLen - bodyLen < 0) {
-                        buffer = realloc(buffer, bufferLen*2  - bodyLen);
+                    contentLength = atol(pch + 1);// should work?
+                    if (bufferLen - contentLength < 0) {
+                        bufferLen += contentLength - bufferLen;
+                        buffer = realloc(buffer, bufferLen);
                     }
                 } else if (strcasecmp(buffer + parserOffset, "Content-Encoding") == 0) {
                     // Looking for "Content-Encoding: gzip"
@@ -218,24 +230,34 @@ ssize_t ReceiveResponse(int fd, void **responseData) {
                     }
                 }
             }
-
             parserOffset = lineEnd+2;
         }
 	}
 
-	if (usesGzip) {
-	    // TODO
+    // This must hold after every request
+	if (headerReceived) {
+	    if (bytesRcvd > headerLength) {// Got a body
+	        if (usesGzip) {
+        	    size_t responseLength = DecompressGzipBuffer(buffer + headerLength, bytesRcvd - headerLength, &responseData);
+        	    free(buffer);
+        	    return responseLength;
+        	} else {
+        	    /*buffer[bytesRcvd-1] = '\0';
+                            printf("%s\n", (const char*)(buffer + headerLength));*/
+
+                // Todo I can't return the offset
+                *responseData = buffer + headerLength;
+                return responseRecv - headerLength;
+        	}
+        }
+        return 0;// No body received
 	}
 
-    if (responseReceived > 0 && headerReceived) {
-        buffer[responseRecv]
-        printf("%s\n", (const char*)(response + headerLength));
-    }
-    if (headerReceived && responseData) {
-        *responseData = response + headerLength;
-    	return responseRecv - headerLength;
-    }
-    return 0;
+    // Sometimes life just doesn't work out
+error_cleanup:
+    printf("Error cleanup");
+    free(buffer); // free memory
+    return -1;
 }
 
 /*
