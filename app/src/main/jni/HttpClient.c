@@ -131,7 +131,7 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *host, const char *host, const
 }
 
 /**
-* Find a line ending CRLF
+* Find a line ending CRLF. Returns index of CR
 */
 ssize_t FindLineEnding(void* data, size_t len) {
     size_t i = 0;
@@ -144,70 +144,98 @@ ssize_t FindLineEnding(void* data, size_t len) {
 
 /** @brief Receives a http response using the given socket and prints it to stdout
  *  @param socket descriptor
- *  @param response Pointer to the variable which will get the response buffer. Needs to be free()'d afterwards
+ *  @param responseBodyData Pointer to the variable which will get the response buffer. Needs to be free()'d afterwards
  *  @return 0 on success, -1 on failure
  */
 ssize_t ReceiveResponse(int fd, void **responseData) {
 
-    ssize_t responseLen = 1024, responseRecv = 0,
-    parserOffset = 0, bodyOffset = 0, bodyLength = 0;
-	void *response = malloc(bodyLength);
-    if (!response) {
+    ssize_t bufferLen = 4096, bytesRcvd = 0, parserOffset = 0, headerLength = 0;
+	char *buffer = (char *) malloc(bufferLen);
+    if (!buffer) {
         printf("error malloc");
         return -1;
     }
-    bool useGzip = false;
+    bool usesGzip = false, headerReceived = false;
+    int status = 0;
 
 	while(true) {// there are still bytes to receive
-		ssize_t status = recv(fd, (uint8_t*)response + responseRecv, responseLen - responseRecv, 0);
-
+		ssize_t status = recv(fd, (uint8_t*)buffer + bytesRcvd, bufferLen - bytesRcvd, 0);
 		if(status == -1) {// print user-friendly message on error
-			free(response); // free memory
-			printf("recvfrom");
+			free(buffer); // free memory
+			printf("recv");
 			return -1;
 		} else if(status == 0) { // print error message on connection close
 			//free(response); // free memory
 			printf("Connection closed by the server.\n");
-
             // TODO
-
-
 			break;
 		}
-
-		ssize_t lineEnd = FindLineEnding(response + parserOffset, responseRecv - parserOffset)-;
-		if (lineEnd != -1) {
-		    // TODO
+		bytesRcvd += status;
+		if (bufferLen - bytesRcvd < 512) {// Pretty arbitrary
+		    buffer = realloc(buffer, bufferLen + bytesRcvd/2);
 		}
 
-		responseRecv += status; // status = received number of bytes
-		if(receivedLen >= responseLen) {
-			uint32_t jokeLen = ntohl(response->len_joke);
-			if(jokeLen >= MAX_JOKE_LENGTH) {
-				free(response); // free memory
-				printf("The response contains a too long joke. Not funny.\n");
-				return -1;
-			}
+        // Try to parse the header, pretty ugly
+        if (!headerReceived && status > 0) {
+            ssize_t lineEnd = FindLineEnding(buffer + parserOffset, bytesRcvd - parserOffset);
+            if (lineEnd == -1) continue;
 
-			allowedLen = responseLen + jokeLen;
-		}
-		if(receivedLen > 0 && response->header.type != JOKER_RESPONSE_TYPE) {
-			free(response); // free memory
-			printf("Unknown packet type in response.\n");
-			return -1;
-		}
+            buffer[lineEnd] = '\0';// Artificially terminate the line
+            if (status == 0) {// Should not be 0 after the status line was received
+                // Looking for: "HTTP/1.1 200 OK"
+                char *http = "HTTP/1.";
+                char *pch = strstr(buffer, http);// pointer to
+                if (!pch) break;// TODO should not happen
+
+                // atoi should ignore whitespaces and characters after
+                status = atoi(pch + sizeof(http)+1);
+                printf("Received status %d\n", status);
+                if (status != 200) {
+                    free(buffer); // free memory
+                    return -1;
+                }
+
+            } else if (lineEnd + 4 < responseRecv// Check if this is the end of the header
+            && response[lineEnd + 2] == '\r' && response[lineEnd + 3] == '\n') {
+                headerLength = lineEnd + 4;
+                headerReceived = true;
+            } else {
+                // Looking for something like "Content-Length: 1354"
+                char *pch = strchr(buffer + parserOffset, ':');
+                if (!pch) break;// TODO should not happen
+                *pch = '\0';// Terminate so we can use strcasecmp
+
+                // TODO Could there be leading whitespaces?
+                if (strcasecmp(buffer + parserOffset, "Content-Length") == 0) {
+                    int bodyLen = atoi(pch + 1);// should work?
+                    if (bufferLen - bodyLen < 0) {
+                        buffer = realloc(buffer, bufferLen*2  - bodyLen);
+                    }
+                } else if (strcasecmp(buffer + parserOffset, "Content-Encoding") == 0) {
+                    // Looking for "Content-Encoding: gzip"
+                    if (strstr(pch + 1, "gzip") != null) {
+                        usesGzip = true;
+                    }
+                }
+            }
+
+            parserOffset = lineEnd+2;
+        }
 	}
 
-	if (useGzip) {
+	if (usesGzip) {
 	    // TODO
 	}
 
-    if (responseReceived > 0) {
-        printf("%s\n", (const char*)response);
+    if (responseReceived > 0 && headerReceived) {
+        buffer[responseRecv]
+        printf("%s\n", (const char*)(response + headerLength));
     }
-
-	*responseData = response + bodyOffset;
-	return bodyReceived;
+    if (headerReceived && responseData) {
+        *responseData = response + headerLength;
+    	return responseRecv - headerLength;
+    }
+    return 0;
 }
 
 /*
