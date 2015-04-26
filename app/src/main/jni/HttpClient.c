@@ -202,7 +202,8 @@ int ReceiveResponse(int fd, http_response *response) {
             if (!lineEnd) continue;
 
             *lineEnd = '\0';// Artificially terminate the line
-            printf("Got header line: '%s'\n", (char*)buffer + headerLength);
+            // Since the following calls still use headerLength, but could call realloc
+            size_t nextHeaderLength = (lineEnd - buffer) + 2;//skip the last CRLF
 
             if (httpStatus == 0) {// Should not be 0 after the status line was received
                 // Looking for: "HTTP/1.1 200 OK"
@@ -220,7 +221,7 @@ int ReceiveResponse(int fd, http_response *response) {
             && lineEnd[3] == '\n') {
                 headerReceived = true;
                 printf("Found blank line\n");
-                //headerLength = (lineEnd-buffer)+4;//skip the last CR|LF|CR|LF
+                headerLength = (lineEnd-buffer)+4;//skip the last CR|LF|CR|LF
             } else {
 
                 // Looking for something like "Content-Length: 1354"
@@ -244,11 +245,7 @@ int ReceiveResponse(int fd, http_response *response) {
                     }
                 }
             }
-            headerLength = lineEnd - buffer;//skip the last CRLF
-            headerLength += 2;
-            printf("Buffer %zu; LineEnd %zu\n", (unsigned long)lineEnd, (unsigned long)buffer);
-            printf ("Setting header offset to %zu\n", headerLength);
-            printf ("Total bytes received %zu\n", bytesRcvd);
+            headerLength = nextHeaderLength;
         }
 	}
 
@@ -257,7 +254,7 @@ int ReceiveResponse(int fd, http_response *response) {
 	    response->buffer = buffer;
 	    response->bufferLength = bytesRcvd;
 
-	    if (bytesRcvd > headerLength) {// Got a body
+	    if (bytesRcvd > (size_t)headerLength) {// Got a body
 	        if (usesGzip) {
         	    response->contentLength = DecompressGzipBuffer(buffer + headerLength,
         	                                                   bytesRcvd - headerLength,
@@ -268,8 +265,8 @@ int ReceiveResponse(int fd, http_response *response) {
         	    response->content = buffer + headerLength;
         	    response->contentLength = bytesRcvd - headerLength;
         	}
-        	response->content[response->contentLength-1] = '\0';
-        	printf("Body:\n%s\n", (char *)response->content);
+        	/*response->content[response->contentLength-1] = '\0';
+        	printf("Body:\n%s\n", (char *)response->content);*/
         }
         return 0;// All cool
 	}
@@ -287,14 +284,13 @@ error_cleanup:
  * Method:    requestUrl
  * Signature: (Ljava/lang/String;Ljava/lang/String;)[B
  */
-/*JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPlan_requestUrl (JNIEnv *env, jobject object, jstring serverhost, jstring path) {
+JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPlan_requestUrl (JNIEnv *env, jobject object, jstring serverhost, jstring path) {
     const char *cServerHost = (*env)->GetStringUTFChars(env, serverhost, 0);
     const char *cPath = (*env)->GetStringUTFChars(env, path, 0);
     //*/
-int main() {
     //Testing http://www.studentenwerk-aachen.de/speiseplaene/academica-w.html
-    const char *cServerHost = "www.studentenwerk-aachen.de";
-    const char *cPath = "/speiseplaene/academica-w.html";
+    //const char *cServerHost = "www.studentenwerk-aachen.de";
+    //const char *cPath = "/speiseplaene/academica-w.html";
 
     struct addrinfo *host = ResolveHost(cServerHost, "80"); // resolve hostname and port
 
@@ -318,14 +314,19 @@ int main() {
     if(ReceiveResponse(fd, &response) == -1) { // receive & print response
         close(fd); // close socket
         freeaddrinfo(host); // free addrinfo(s)
-        return -4;
+        return NULL;
     }
+
+    // Final result array
+    jbyteArray arr = (*env)->NewByteArray(env, response.contentLength);
+    (*env)->SetByteArrayRegion(env,arr,0,response.contentLength, (jbyte*)response.content);
 
     free(response.buffer);
     close(fd); // close socket
     freeaddrinfo(host); // free addrinfo(s)
 
     // Releasing allocated c strings
-    //(*env)->ReleaseStringUTFChars(env, serverhost, cServerHost);
-    //(*env)->ReleaseStringUTFChars(env, path, cPath);
+    (*env)->ReleaseStringUTFChars(env, serverhost, cServerHost);
+    (*env)->ReleaseStringUTFChars(env, path, cPath);
+    return arr;
 }
