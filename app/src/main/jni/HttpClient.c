@@ -176,7 +176,7 @@ int ReceiveResponse(int fd, http_response *response) {
     }
 
 	while(!headerReceived
-	      || (contentLength != 0 && bytesRcvd < contentLength + headerLength)) {
+	      || (contentLength != 0 && bytesRcvd <= contentLength + headerLength)) {
 
 		ssize_t byteCount = recv(fd, buffer + bytesRcvd, bufferLen - bytesRcvd, 0);
 		if(byteCount == -1) {// print user-friendly message on error
@@ -196,6 +196,7 @@ int ReceiveResponse(int fd, http_response *response) {
 
         // Try to parse the header, pretty ugly
         if (!headerReceived) {
+            // The buffer should be always bigger so we can do this without worries
             buffer[bytesRcvd+1] = '\0';
             uint8_t *lineEnd = strstr(buffer+headerLength, "\r\n");
             if (!lineEnd) continue;
@@ -219,7 +220,7 @@ int ReceiveResponse(int fd, http_response *response) {
             } else if (lineEnd[2] == '\r' && lineEnd[3] == '\n') {// Technically this should look like "...|0|LF|CR|LF"
                 headerReceived = true;
                 debugLog("Found blank line\n");
-                headerLength = (lineEnd-buffer)+4;//skip the last CR|LF|CR|LF
+                nextHeaderLength += 2;//skip the last CR|LF|CR|LF
             } else {
 
                 // Looking for something like "Content-Length: 1354"
@@ -239,6 +240,7 @@ int ReceiveResponse(int fd, http_response *response) {
                 } else if (strcasecmp((char*)buffer + headerLength, "Content-Encoding") == 0) {
                     // Looking for "Content-Encoding: gzip"
                     if (strstr(pch + 1, "gzip")) {
+                        debugLog("Using gzip");
                         usesGzip = true;
                     }
                 }
@@ -247,6 +249,7 @@ int ReceiveResponse(int fd, http_response *response) {
         }
 	}
 
+    debugLog("Bytes Received: %zu\nHeader length %zu\n", bytesRcvd, headerLength);
     // This must hold after every request
 	if (headerReceived) {
 	    response->buffer = buffer;
@@ -263,8 +266,6 @@ int ReceiveResponse(int fd, http_response *response) {
         	    response->content = buffer + headerLength;
         	    response->contentLength = bytesRcvd - headerLength;
         	}
-        	/*response->content[response->contentLength-1] = '\0';
-        	debugLog("Body:\n%s\n", (char *)response->content);*/
         }
         return 0;// All cool
 	}
@@ -317,8 +318,8 @@ JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPl
         return NULL;
     }
 
-    response.content[response.contentLength-1] = '\0';
-    debugLog("Body:\n%s\n", (char *)response.content);
+    /*response.content[response.contentLength-1] = '\0';
+    debugLog("Body:\n%s\n", (char *)response.content);*/
 
     // Final result array
     jbyteArray arr = (*env)->NewByteArray(env, response.contentLength);

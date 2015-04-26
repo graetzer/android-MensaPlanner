@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -62,10 +63,17 @@ public class MealPlan {
     public MealPlan(String url) {
         Uri u = Uri.parse(url);
         byte[] data = requestUrl(u.getHost(), u.getPath());
+
         if (data == null) {
             Log.d(TAG, "Data is null");
             return;
         }
+        /*try {
+            String str = new String(data, "UTF-8");
+            Log.d(TAG, str);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }*/
         try {
             ByteArrayInputStream in = new ByteArrayInputStream(data);
             parseData(sanitizeStream(in));
