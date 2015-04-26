@@ -160,17 +160,6 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	return result;
 }
 
-/**
-* Find a line ending CRLF. Returns index of CR
-*/
-uint8_t* FindLineEnding(uint8_t* data, size_t len) {
-    size_t i = 0;
-    while(++i < len) {
-        if (data[i] == '\r' && data[i+1] == '\n') return data+i;
-    }
-    return 0;
-}
-
 /** @brief Receives a http response using the given socket and prints it to stdout
  *  @param socket descriptor
  *  @param responseBodyData Pointer to the variable which will get the response buffer. Needs to be free()'d afterwards
@@ -178,8 +167,7 @@ uint8_t* FindLineEnding(uint8_t* data, size_t len) {
  */
 int ReceiveResponse(int fd, http_response *response) {
     size_t bufferLen = 4096, bytesRcvd = 0, headerLength = 0, contentLength = 0;
-    bool usesGzip = false, headerReceived = false;
-    int httpStatus = 0;
+    bool usesGzip = false, headerReceived = false, httpStatusReceived = false;
 
 	uint8_t *buffer = (uint8_t *) malloc(bufferLen);
     if (!buffer) {
@@ -208,28 +196,25 @@ int ReceiveResponse(int fd, http_response *response) {
 
         // Try to parse the header, pretty ugly
         if (!headerReceived) {
-            uint8_t *lineEnd = FindLineEnding(buffer + headerLength, bytesRcvd - headerLength);
+            buffer[bytesRcvd+1] = '\0';
+            uint8_t *lineEnd = strstr(buffer+headerLength, "\r\n");
             if (!lineEnd) continue;
-            debugLog("Line: %s", lineEnd);
 
             *lineEnd = '\0';// Artificially terminate the line
+            debugLog("Line: %s", buffer+headerLength);
             // Since the following calls still use headerLength, but could call realloc
             size_t nextHeaderLength = (lineEnd - buffer) + 2;//skip the last CRLF
 
-            if (httpStatus == 0) {// Should not be 0 after the status line was received
+            if (!httpStatusReceived) {// Should not be 0 after the status line was received
                 // Looking for: "HTTP/1.1 200 OK"
-                char *http = "HTTP/1.";
-                char *pch = strstr((char*)buffer, http);// pointer to
+                char *pch = strstr((char*)buffer, "HTTP/1.");
                 if (!pch) goto error_cleanup;// should not happen
-
-                // atoi should ignore whitespaces and characters after the status code
-                httpStatus = atoi(pch + sizeof(http)+1);
-                debugLog("HTTP status %d\n", httpStatus);
-                if (httpStatus != 200) goto error_cleanup;
-
-            } else if (lineEnd+3 < buffer+bytesRcvd// Check if this is the end of the header
-            && lineEnd[2] == '\r'// Technically this should look like "...|0|LF|CR|LF"
-            && lineEnd[3] == '\n') {
+                pch = strstr((char*)buffer, "200");
+                if (!pch) {
+                    debugLog("Status code is not 200");
+                    goto error_cleanup;
+                } else debugLog("Status 200 OK");
+            } else if (lineEnd[2] == '\r' && lineEnd[3] == '\n') {// Technically this should look like "...|0|LF|CR|LF"
                 headerReceived = true;
                 debugLog("Found blank line\n");
                 headerLength = (lineEnd-buffer)+4;//skip the last CR|LF|CR|LF
