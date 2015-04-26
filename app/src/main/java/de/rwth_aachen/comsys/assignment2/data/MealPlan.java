@@ -62,6 +62,10 @@ public class MealPlan {
     public MealPlan(String url) {
         Uri u = Uri.parse(url);
         byte[] data = requestUrl(u.getHost(), u.getPath());
+        if (data == null) {
+            Log.d(TAG, "Data is null");
+            return;
+        }
         try {
             ByteArrayInputStream in = new ByteArrayInputStream(data);
             parseData(sanitizeStream(in));

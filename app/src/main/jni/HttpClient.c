@@ -1,4 +1,4 @@
-#//include "de_rwth_aachen_comsys_assignment2_data_MealPlan.h"
+#include "de_rwth_aachen_comsys_assignment2_data_MealPlan.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -11,6 +11,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include <zlib.h>
+
+#include <android/log.h>
+#define debugLog(...) __android_log_print(ANDROID_LOG_DEBUG, "HttpClient", __VA_ARGS__)
+//#define debugLog(...) printf(__VA_ARGS__)
 
 typedef struct {
 	uint8_t *buffer; /// entire request, free this pointer
@@ -77,7 +81,7 @@ struct addrinfo *ResolveHost(const char *server, const char *port) {
 	int errorCode = getaddrinfo(server, port, &hints, &result); // resolve hostname
 
 	if(errorCode != 0) { // print user-friendly message on error
-		printf("Name resolution failed: %s\n", gai_strerror(errorCode));
+		debugLog("Name resolution failed: %s\n", gai_strerror(errorCode));
 		return 0;
 	}
 	return result;
@@ -90,7 +94,7 @@ struct addrinfo *ResolveHost(const char *server, const char *port) {
 int CreateSocketWithOptions(struct addrinfo *host) {
 	int fd = socket(host->ai_family, host->ai_socktype, host->ai_protocol); // create socket using provided parameters
 	if(fd == -1) { // print user-friendly message on error
-		printf("socket");
+		debugLog("socket");
 		return -1;
 	}
 
@@ -103,7 +107,7 @@ int CreateSocketWithOptions(struct addrinfo *host) {
 	int status = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &delay, delayLen); // apply timeout to socket
 	if(status == -1) { // print user-friendly message on error
 		close(fd);
-		printf("setsockopt");
+		debugLog("setsockopt");
 		return -1;
 	}
 
@@ -127,26 +131,32 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	"\r\n",// empty line marks end
 	path, host);//Accept-Encoding: gzip, deflate
 	if(requestLen == -1) { // print user-friendly message on error
-    	printf("error asprintf");
+    	debugLog("error asprintf\n");
     	return -1;
     }
+    //debugLog("Sending Message:\n%s", request);
 
-	// MSG_FASTOPEN doesn't work on BSD or most other systems
-#ifdef MSG_FASTOPEN
-	ssize_t result = sendto(fd, request, requestLen, MSG_FASTOPEN, addr->ai_addr, addr->ai_addrlen); // send data with TCP fast open
-#else
+	// MSG_FASTOPEN doesn't work on BSD or most other systems yet
+//#ifdef MSG_FASTOPEN
+//	ssize_t result = sendto(fd, request, requestLen, MSG_FASTOPEN, addr->ai_addr, addr->ai_addrlen); // send data with TCP fast open
+//#else
 	if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-		printf("error connect");
+		debugLog("error connect\n");
 		return -1;
 	}
-	ssize_t result = send(fd, request, requestLen, 0);
-#endif
-
-	free(request); // free allocated memory
+	ssize_t result = 0, total = 0;
+	while (total < requestLen) {
+	    result = send(fd, request+total, requestLen-total, 0);
+	    if (result == -1) break;
+	    total += result;
+	}
+//#endif
+	 // free allocated memory
 	if(result == -1) { // print user-friendly message on error
-		printf("error sendto");
-		return -1;
+		debugLog("Error send: %s\n", strerror(errno));
 	}
+
+	free(request);
 	return result;
 }
 
@@ -173,7 +183,7 @@ int ReceiveResponse(int fd, http_response *response) {
 
 	uint8_t *buffer = (uint8_t *) malloc(bufferLen);
     if (!buffer) {
-        printf("error malloc");
+        debugLog("error malloc");
         return -1;
     }
 
@@ -182,10 +192,10 @@ int ReceiveResponse(int fd, http_response *response) {
 
 		ssize_t byteCount = recv(fd, buffer + bytesRcvd, bufferLen - bytesRcvd, 0);
 		if(byteCount == -1) {// print user-friendly message on error
-			printf("Error recv");
+			debugLog("Error recv");
 			goto error_cleanup;
 		} else if(byteCount == 0) { // print error message on connection close
-			printf("Connection closed by the server.\n");
+			debugLog("Connection closed by the server.\n");
 			break;
 		}
 		// We are gonna fill up the buffer
@@ -200,6 +210,7 @@ int ReceiveResponse(int fd, http_response *response) {
         if (!headerReceived) {
             uint8_t *lineEnd = FindLineEnding(buffer + headerLength, bytesRcvd - headerLength);
             if (!lineEnd) continue;
+            debugLog("Line: %s", lineEnd);
 
             *lineEnd = '\0';// Artificially terminate the line
             // Since the following calls still use headerLength, but could call realloc
@@ -213,14 +224,14 @@ int ReceiveResponse(int fd, http_response *response) {
 
                 // atoi should ignore whitespaces and characters after the status code
                 httpStatus = atoi(pch + sizeof(http)+1);
-                printf("HTTP status %d\n", httpStatus);
+                debugLog("HTTP status %d\n", httpStatus);
                 if (httpStatus != 200) goto error_cleanup;
 
             } else if (lineEnd+3 < buffer+bytesRcvd// Check if this is the end of the header
             && lineEnd[2] == '\r'// Technically this should look like "...|0|LF|CR|LF"
             && lineEnd[3] == '\n') {
                 headerReceived = true;
-                printf("Found blank line\n");
+                debugLog("Found blank line\n");
                 headerLength = (lineEnd-buffer)+4;//skip the last CR|LF|CR|LF
             } else {
 
@@ -232,7 +243,7 @@ int ReceiveResponse(int fd, http_response *response) {
                 // TODO Could there be leading whitespaces? Seems to work anyway
                 if (strcasecmp((char*)buffer + headerLength, "Content-Length") == 0) {
                     contentLength = atol(pch + 1);
-                    printf("Received Content-Length: %zu\n", contentLength);
+                    debugLog("Received Content-Length: %zu\n", contentLength);
                     if (contentLength+bytesRcvd >= bufferLen) {
                         bufferLen += contentLength+bytesRcvd - bufferLen;
                         buffer = (uint8_t *) realloc(buffer, bufferLen);
@@ -266,15 +277,15 @@ int ReceiveResponse(int fd, http_response *response) {
         	    response->contentLength = bytesRcvd - headerLength;
         	}
         	/*response->content[response->contentLength-1] = '\0';
-        	printf("Body:\n%s\n", (char *)response->content);*/
+        	debugLog("Body:\n%s\n", (char *)response->content);*/
         }
         return 0;// All cool
 	}
-	printf("It seems there was no complete header\n");
+	debugLog("It seems there was no complete header\n");
 
     // Sometimes life just doesn't work out
 error_cleanup:
-    printf("Error cleanup\n");
+    debugLog("Error cleanup\n");
     free(buffer);
     return -1;
 }
@@ -293,20 +304,21 @@ JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPl
     //const char *cPath = "/speiseplaene/academica-w.html";
 
     struct addrinfo *host = ResolveHost(cServerHost, "80"); // resolve hostname and port
+    if(!host) return NULL;// exit if hostname could not be resolved
 
-    if(!host) // exit if hostname could not be resolved
-        return -1;
 
     int fd = CreateSocketWithOptions(host); // create socket
     if(fd == -1) { // exit if the socket could not be created
         freeaddrinfo(host); // free addrinfo(s)
-        return -2;
+        debugLog("Error CreateSocketWithOptions");
+        return NULL;
     }
 
     if(ConnectAndSendGET(fd, host, cServerHost, cPath) == -1) { // connect & send request
         close(fd); // close socket
         freeaddrinfo(host); // free addrinfo(s)
-        return -3;
+        debugLog("Error ConnectAndSendGET");
+        return NULL;
     }
 
     http_response response;
@@ -314,14 +326,18 @@ JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPl
     if(ReceiveResponse(fd, &response) == -1) { // receive & print response
         close(fd); // close socket
         freeaddrinfo(host); // free addrinfo(s)
+        debugLog("Error ReceiveResponse");
         return NULL;
     }
+
+    response.content[response.contentLength-1] = '\0';
+    debugLog("Body:\n%s\n", (char *)response.content);
 
     // Final result array
     jbyteArray arr = (*env)->NewByteArray(env, response.contentLength);
     (*env)->SetByteArrayRegion(env,arr,0,response.contentLength, (jbyte*)response.content);
 
-    free(response.buffer);
+    //free(response.buffer);
     close(fd); // close socket
     freeaddrinfo(host); // free addrinfo(s)
 

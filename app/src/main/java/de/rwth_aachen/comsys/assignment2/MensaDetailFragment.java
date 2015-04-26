@@ -78,13 +78,14 @@ public class MensaDetailFragment extends ListFragment {
 
         @Override
         protected MealPlan doInBackground(Mensa... params) {
-            try {
+            /*try {
                 return new MealPlan(getResources().getAssets().open("mensa.html"));
             } catch (IOException e) {
                 Log.e(TAG, "Error while reading asset mensa.html", e);
             }
             return null;
-            //return new MealPlan(params[0].url);
+            // For testing use above code*/
+            return new MealPlan(params[0].url);
         }
 
         @Override
