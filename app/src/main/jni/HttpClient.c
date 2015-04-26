@@ -201,7 +201,7 @@ int ReceiveResponse(int fd, http_response *response) {
             if (!lineEnd) continue;
 
             *lineEnd = '\0';// Artificially terminate the line
-            debugLog("Line: %s", buffer+headerLength);
+            debugLog("Header '%s'", buffer+headerLength);
             // Since the following calls still use headerLength, but could call realloc
             size_t nextHeaderLength = (lineEnd - buffer) + 2;//skip the last CRLF
 
@@ -213,7 +213,9 @@ int ReceiveResponse(int fd, http_response *response) {
                 if (!pch) {
                     debugLog("Status code is not 200");
                     goto error_cleanup;
-                } else debugLog("Status 200 OK");
+                }
+                httpStatusReceived = true;
+                debugLog("Status 200 OK");
             } else if (lineEnd[2] == '\r' && lineEnd[3] == '\n') {// Technically this should look like "...|0|LF|CR|LF"
                 headerReceived = true;
                 debugLog("Found blank line\n");
