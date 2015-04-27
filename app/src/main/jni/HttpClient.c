@@ -134,18 +134,15 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	"Host: %s\r\n"
 	"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:37.0) Gecko/20100101 Firefox/37.0\r\n"// Just because
 	"Connection: close\r\n"// we don't do keep-alive
+	//"Accept-Encoding: gzip\r\n"
 	"\r\n",// empty line marks end
-	path, host);//Accept-Encoding: gzip, deflate
+	path, host);
 	if(requestLen == -1) { // print user-friendly message on error
     	debugLog("error asprintf\n");
     	return -1;
     }
     //debugLog("Sending Message:\n%s", request);
 
-	// MSG_FASTOPEN doesn't work on BSD or most other systems yet
-//#ifdef MSG_FASTOPEN
-//	ssize_t result = sendto(fd, request, requestLen, MSG_FASTOPEN, addr->ai_addr, addr->ai_addrlen); // send data with TCP fast open
-//#else
 	if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
 		debugLog("error connect\n");
 		return -1;
@@ -156,48 +153,44 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	    if (result == -1) break;
 	    total += result;
 	}
-//#endif
-	 // free allocated memory
-	if(result == -1) { // print user-friendly message on error
-		debugLog("Error send: %s\n", strerror(errno));
-	}
+	if(result == -1) debugLog("Error send: %s\n", strerror(errno));
 
 	free(request);
 	return result;
 }
 
+/**
+ * Expects the buffer to have at least one '\0' at the end.
+ */
 bool ParseHeader(uint8_t *buffer, uint8_t bufferLength, http_header* header) {
 
-    while (header->headerLength < bufferLength) {
-        char *lineBegin = (char *)buffer+header->headerLength;
-        uint8_t *lineEnd = strstr(lineBegin, "\r\n");
-        if (!lineEnd) break;
+    // Wait till we have the complete header
+    char *pch;
+    if ((pch = strstr(buffer, "\r\n\r\n")) == 0) return false;
+    header->headerLength += (size_t)(pch+4 - (char*)buffer);//skip the last CR|LF|CR|LF
+    debugLog("Found end of header\n");
 
-        header->headerLength = (lineEnd - buffer) + 2;
-        *lineEnd = '\0';// Artificially terminate the line so we use strstr, strchr and printf
-        debugLog("Header '%s'", lineBegin);
+    char* parserPointer = buffer;
+    while (parserPointer < (char*)buffer + header->headerLength) {
+        char *lineBegin = parserPointer;
+        char *lineEnd = strstr(lineBegin, "\r\n");// Look for CRLF
+        if (!lineEnd) break;// Shouldn't happen
+        parserPointer = lineEnd + 2;//skip CRLF
 
-        if (header->status == 0) {// Should not be 0 after the status line was received
-            // Looking for: "HTTP/1.1 200 OK"
-            const char* http = "HTTP/1.1";
-            char *pch = strstr(lineBegin, http);
-            if (!pch) break;// should not happen
-
-            // atol can not handle whitespaces contrary to documentation
-            header->status = strtol(pch + strlen(http)+1, 0, 10);
+        const char* http = "HTTP/1.1";
+        if ((pch = strstr(lineBegin, http)) != 0) {// Looking for: "HTTP/1.1 200 OK"
+            header->status = atol(pch + strlen(http)+1);
             debugLog("Received status code %ld", header->status);
 
-        } else if (lineEnd[2] == '\r' && lineEnd[3] == '\n') {// Technically this should look like "...|0|LF|CR|LF"
-            debugLog("Found end of header\n");
-            header->headerLength += 2;//skip the last CR|LF|CR|LF
-            return true;
         } else {
+            // Artificially terminate the line so we use strstr, strchr and printf
+            *lineEnd = '\0';
+            debugLog("Header '%s'", lineBegin);
 
-            // Looking for something like "Content-Length: 1354"
-            char *pch = strchr(lineBegin, ':');
-            if (!pch) break;
+            // Looking for a header like "Content-Length: 1354"
+            if ((pch = strchr(lineBegin, ':')) == 0) continue;
+
             *pch = '\0';// Terminate so we can use strcasecmp
-
             // TODO Could there be leading whitespaces? Seems to work anyway
             if (strcasecmp(lineBegin, "Content-Length") == 0) {
                 header->contentLength = atol(pch + 1);
@@ -212,7 +205,7 @@ bool ParseHeader(uint8_t *buffer, uint8_t bufferLength, http_header* header) {
             }
         }
     }
-    return false;// TODO maybe return error value?
+    return true;
 }
 
 /** @brief Receives a http response using the given socket and prints it to stdout
