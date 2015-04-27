@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Assignment2</string>
-    <string name="title_mensa_detail">Mensa Detail</string>
+    <string name="app_name">Mensaplaner</string>
+    <string name="title_mensa_detail">Tagesplan</string>
 </resources>
