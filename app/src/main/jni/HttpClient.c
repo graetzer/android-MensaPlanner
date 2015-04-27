@@ -17,9 +17,15 @@
 //#define debugLog(...) printf(__VA_ARGS__)
 
 typedef struct {
+	long status; /// entire request, free this pointer
+	bool usesGzip;
+	size_t headerLength, contentLength;
+} http_header;
+
+typedef struct {
+    http_header header;
 	uint8_t *buffer; /// entire request, free this pointer
-	uint8_t *content; /// content
-	size_t bufferLength, contentLength;
+	uint8_t *content; /// pointer to content
 } http_response;
 
 /** @brief Decrompress data compressed with gzip
@@ -128,18 +134,15 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	"Host: %s\r\n"
 	"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:37.0) Gecko/20100101 Firefox/37.0\r\n"// Just because
 	"Connection: close\r\n"// we don't do keep-alive
+	//"Accept-Encoding: gzip\r\n"
 	"\r\n",// empty line marks end
-	path, host);//Accept-Encoding: gzip, deflate
+	path, host);
 	if(requestLen == -1) { // print user-friendly message on error
     	debugLog("error asprintf\n");
     	return -1;
     }
     //debugLog("Sending Message:\n%s", request);
 
-	// MSG_FASTOPEN doesn't work on BSD or most other systems yet
-//#ifdef MSG_FASTOPEN
-//	ssize_t result = sendto(fd, request, requestLen, MSG_FASTOPEN, addr->ai_addr, addr->ai_addrlen); // send data with TCP fast open
-//#else
 	if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
 		debugLog("error connect\n");
 		return -1;
@@ -150,14 +153,59 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	    if (result == -1) break;
 	    total += result;
 	}
-//#endif
-	 // free allocated memory
-	if(result == -1) { // print user-friendly message on error
-		debugLog("Error send: %s\n", strerror(errno));
-	}
+	if(result == -1) debugLog("Error send: %s\n", strerror(errno));
 
 	free(request);
 	return result;
+}
+
+/**
+ * Expects the buffer to have at least one '\0' at the end.
+ */
+bool ParseHeader(uint8_t *buffer, uint8_t bufferLength, http_header* header) {
+
+    // Wait till we have the complete header
+    char *pch;
+    if ((pch = strstr(buffer, "\r\n\r\n")) == 0) return false;
+    header->headerLength += (size_t)(pch+4 - (char*)buffer);//skip the last CR|LF|CR|LF
+    debugLog("Found end of header\n");
+
+    char* parserPointer = buffer;
+    while (parserPointer < (char*)buffer + header->headerLength) {
+        char *lineBegin = parserPointer;
+        char *lineEnd = strstr(lineBegin, "\r\n");// Look for CRLF
+        if (!lineEnd) break;// Shouldn't happen
+        parserPointer = lineEnd + 2;//skip CRLF
+
+        const char* http = "HTTP/1.1";
+        if ((pch = strstr(lineBegin, http)) != 0) {// Looking for: "HTTP/1.1 200 OK"
+            header->status = atol(pch + strlen(http)+1);
+            debugLog("Received status code %ld", header->status);
+
+        } else {
+            // Artificially terminate the line so we use strstr, strchr and printf
+            *lineEnd = '\0';
+            debugLog("Header '%s'", lineBegin);
+
+            // Looking for a header like "Content-Length: 1354"
+            if ((pch = strchr(lineBegin, ':')) == 0) continue;
+
+            *pch = '\0';// Terminate so we can use strcasecmp
+            // TODO Could there be leading whitespaces? Seems to work anyway
+            if (strcasecmp(lineBegin, "Content-Length") == 0) {
+                header->contentLength = atol(pch + 1);
+                debugLog("Received Content-Length: %zu\n", header->contentLength);
+
+            } else if (strcasecmp(lineBegin, "Content-Encoding") == 0) {
+                // Looking for "Content-Encoding: gzip"
+                if (strstr(pch + 1, "gzip")) {
+                    debugLog("Using gzip");
+                    header->usesGzip = true;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 /** @brief Receives a http response using the given socket and prints it to stdout
@@ -165,9 +213,11 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
  *  @param responseBodyData Pointer to the variable which will get the response buffer. Needs to be free()'d afterwards
  *  @return 0 on success, -1 on failure
  */
-int ReceiveResponse(int fd, http_response *response) {
-    size_t bufferLen = 4096, bytesRcvd = 0, headerLength = 0, contentLength = 0;
-    bool usesGzip = false, headerReceived = false, httpStatusReceived = false;
+bool ReceiveResponse(int fd, http_response *response) {
+    size_t bufferLen = 4096, bytesRcvd = 0;
+    bool headerReceived = false;
+    http_header header;
+    memset(&header, 0, sizeof(http_header));
 
 	uint8_t *buffer = (uint8_t *) malloc(bufferLen);
     if (!buffer) {
@@ -176,7 +226,7 @@ int ReceiveResponse(int fd, http_response *response) {
     }
 
 	while(!headerReceived
-	      || (contentLength != 0 && bytesRcvd <= contentLength + headerLength)) {
+	      || (header.contentLength != 0 && bytesRcvd <= header.contentLength + header.headerLength)) {
 
 		ssize_t byteCount = recv(fd, buffer + bytesRcvd, bufferLen - bytesRcvd, 0);
 		if(byteCount == -1) {// print user-friendly message on error
@@ -198,76 +248,38 @@ int ReceiveResponse(int fd, http_response *response) {
         if (!headerReceived) {
             // The buffer should be always bigger so we can do this without worries
             buffer[bytesRcvd+1] = '\0';
-            uint8_t *lineEnd = strstr(buffer+headerLength, "\r\n");
-            if (!lineEnd) continue;
-
-            *lineEnd = '\0';// Artificially terminate the line
-            debugLog("Header '%s'", buffer+headerLength);
-            // Since the following calls still use headerLength, but could call realloc
-            size_t nextHeaderLength = (lineEnd - buffer) + 2;//skip the last CRLF
-
-            if (!httpStatusReceived) {// Should not be 0 after the status line was received
-                // Looking for: "HTTP/1.1 200 OK"
-                char *pch = strstr((char*)buffer, "HTTP/1.");
-                if (!pch) goto error_cleanup;// should not happen
-                pch = strstr((char*)buffer, "200");
-                if (!pch) {
-                    debugLog("Status code is not 200");
-                    goto error_cleanup;
-                }
-                httpStatusReceived = true;
-                debugLog("Status 200 OK");
-            } else if (lineEnd[2] == '\r' && lineEnd[3] == '\n') {// Technically this should look like "...|0|LF|CR|LF"
-                headerReceived = true;
-                debugLog("Found blank line\n");
-                nextHeaderLength += 2;//skip the last CR|LF|CR|LF
-            } else {
-
-                // Looking for something like "Content-Length: 1354"
-                char *pch = strchr((char*)buffer + headerLength, ':');
-                if (!pch) goto error_cleanup;
-                *pch = '\0';// Terminate so we can use strcasecmp
-
-                // TODO Could there be leading whitespaces? Seems to work anyway
-                if (strcasecmp((char*)buffer + headerLength, "Content-Length") == 0) {
-                    contentLength = atol(pch + 1);
-                    debugLog("Received Content-Length: %zu\n", contentLength);
-                    if (contentLength+bytesRcvd >= bufferLen) {
-                        bufferLen += contentLength+bytesRcvd - bufferLen;
-                        buffer = (uint8_t *) realloc(buffer, bufferLen);
-                        if (!buffer) goto error_cleanup;
-                    }
-                } else if (strcasecmp((char*)buffer + headerLength, "Content-Encoding") == 0) {
-                    // Looking for "Content-Encoding: gzip"
-                    if (strstr(pch + 1, "gzip")) {
-                        debugLog("Using gzip");
-                        usesGzip = true;
-                    }
-                }
+            headerReceived = ParseHeader(buffer, bytesRcvd+1, &header);
+            // If contentLength is suddenly greater than 0
+            if (bufferLen < header.contentLength+bytesRcvd) {
+                bufferLen += header.contentLength + bytesRcvd - bufferLen;
+                buffer = (uint8_t *) realloc(buffer, bufferLen);
+                if (!buffer) goto error_cleanup;
             }
-            headerLength = nextHeaderLength;
         }
 	}
 
-    debugLog("Bytes Received: %zu\nHeader length %zu\n", bytesRcvd, headerLength);
+    debugLog("Bytes Received: %zu\nHeader length %zu\n", bytesRcvd, header.headerLength);
     // This must hold after every request
 	if (headerReceived) {
-	    response->buffer = buffer;
-	    response->bufferLength = bytesRcvd;
+	    if (bytesRcvd > (size_t)header.headerLength) {// Got a body
+	        if (header.usesGzip) {
+        	    header.contentLength = DecompressGzipBuffer(buffer + header.headerLength,
+        	    bytesRcvd - header.headerLength,
+        	    &(response->content));
 
-	    if (bytesRcvd > (size_t)headerLength) {// Got a body
-	        if (usesGzip) {
-        	    response->contentLength = DecompressGzipBuffer(buffer + headerLength,
-        	                                                   bytesRcvd - headerLength,
-        	                                                   &(response->content));
         	    free(buffer);
-        	    return bytesRcvd;
+        	    response->buffer = response->content;
         	} else {
-        	    response->content = buffer + headerLength;
-        	    response->contentLength = bytesRcvd - headerLength;
+        	    response->buffer = buffer;
+        	    response->content = buffer + header.headerLength;
+        	    if (header.contentLength != bytesRcvd - header.headerLength) {
+        	        debugLog("Invalid content length\n");
+        	        goto error_cleanup;
+        	    }
         	}
         }
-        return 0;// All cool
+        response->header = header;
+        return true;// All cool
 	}
 	debugLog("It seems there was no complete header\n");
 
@@ -275,7 +287,7 @@ int ReceiveResponse(int fd, http_response *response) {
 error_cleanup:
     debugLog("Error cleanup\n");
     free(buffer);
-    return -1;
+    return false;
 }
 
 /*
@@ -311,7 +323,7 @@ JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPl
 
     http_response response;
     memset(&response, 0, sizeof(http_response));
-    if(ReceiveResponse(fd, &response) == -1) { // receive & print response
+    if(ReceiveResponse(fd, &response) == false) { // receive & print response
         close(fd); // close socket
         freeaddrinfo(host); // free addrinfo(s)
         debugLog("Error ReceiveResponse");
@@ -322,8 +334,8 @@ JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPl
     debugLog("Body:\n%s\n", (char *)response.content);*/
 
     // Final result array
-    jbyteArray arr = (*env)->NewByteArray(env, response.contentLength);
-    (*env)->SetByteArrayRegion(env,arr,0,response.contentLength, (jbyte*)response.content);
+    jbyteArray arr = (*env)->NewByteArray(env, response.header.contentLength);
+    (*env)->SetByteArrayRegion(env,arr,0,response.header.contentLength, (jbyte*)response.content);
 
     //free(response.buffer);
     close(fd); // close socket

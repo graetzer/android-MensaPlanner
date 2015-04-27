@@ -1,21 +1,21 @@
 package de.rwth_aachen.comsys.assignment2;
 
+import android.app.Fragment;
 import android.app.ListFragment;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.app.Fragment;
-import android.util.Log;
+import android.support.v4.view.PagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
 
 
-import java.io.IOException;
 import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
@@ -23,7 +23,7 @@ import java.util.Locale;
 import de.rwth_aachen.comsys.assignment2.data.MealPlan;
 import de.rwth_aachen.comsys.assignment2.data.Mensa;
 
-public class MensaDetailFragment extends ListFragment {
+public class MensaDetailFragment extends Fragment {
     private static final String TAG = MensaDetailFragment.class.getSimpleName();
     public static final String ARG_ITEM_ID = "mensa_id";
     private Mensa mMensa;
@@ -60,19 +60,19 @@ public class MensaDetailFragment extends ListFragment {
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
+        ViewPager pager = (ViewPager) view;
         if (mMensa != null) {
             new MealPlanTask().execute(mMensa);
         }
     }
 
     private class MealPlanTask extends AsyncTask<Mensa, Void, MealPlan> {
-        ProgressDialog progress;
+        private ProgressDialog mProgress;
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            progress = ProgressDialog.show(getActivity(), "Loading the meal plan",
+            mProgress = ProgressDialog.show(getActivity(), "Loading the meal plan",
                     "please wait a little...", true, false);
         }
 
@@ -91,22 +91,65 @@ public class MensaDetailFragment extends ListFragment {
         @Override
         protected void onPostExecute(MealPlan mealPlan) {
             super.onPostExecute(mealPlan);
-            progress.cancel();
+            mProgress.cancel();
             if (getActivity() != null
                     && mealPlan != null
                     && mealPlan.days.size() > 0) {
-                List<MealPlan.Menu> menus = mealPlan.days.get(mealPlan.todayId).menus;
-                setListAdapter(new MenuAdapter(getActivity(), menus));
+
+                DaysPagerAdapter adapter = new DaysPagerAdapter(getActivity(), mealPlan.days);
+                ViewPager pager = (ViewPager) getView();
+                pager.setAdapter(adapter);
             }
         }
     }
 
-    private static class MenuAdapter extends BaseAdapter {
+    private static class DaysPagerAdapter extends PagerAdapter {
+        private Context mCtx;
+        private List<MealPlan.Day> mDays;
+
+        public DaysPagerAdapter(Context ctx, List<MealPlan.Day> days) {
+            this.mCtx = ctx;
+            this.mDays = days;
+        }
+
+        @Override
+        public int getCount() {
+            return mDays.size();
+        }
+
+        @Override
+        public boolean isViewFromObject(View view, Object object) {
+            return view == object;
+        }
+
+        @Override
+        public Object instantiateItem(ViewGroup container, int position) {
+            MealPlan.Day day = mDays.get(position);
+            View view = LayoutInflater.from(mCtx).inflate(R.layout.menu_list, container, false);
+            ListView list = (ListView)view.findViewById(android.R.id.list);
+            list.setAdapter(new MenuListAdapter(mCtx, day.menus));
+            list.setEmptyView(view.findViewById(android.R.id.empty));
+            container.addView(view);
+            return view;
+        }
+
+        @Override
+        public void destroyItem(ViewGroup container, int position, Object object) {
+            container.removeView((View) object);
+        }
+
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return mDays.get(position).name;
+        }
+    }
+
+    private static class MenuListAdapter extends BaseAdapter {
         Context ctx;
         private List<MealPlan.Menu> mMenus;
         NumberFormat format = NumberFormat.getCurrencyInstance(Locale.GERMANY);
 
-        public MenuAdapter(Context ctx, List<MealPlan.Menu> menus) {
+        public MenuListAdapter(Context ctx, List<MealPlan.Menu> menus) {
             this.ctx = ctx;
             this.mMenus = menus;
         }
@@ -129,7 +172,7 @@ public class MensaDetailFragment extends ListFragment {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             if (convertView == null) {
-                convertView = LayoutInflater.from(ctx).inflate(R.layout.course_list_item, parent, false);
+                convertView = LayoutInflater.from(ctx).inflate(R.layout.menu_list_item, parent, false);
             }
             TextView categoryTV = (TextView) convertView.findViewById(R.id.textView_category);
             TextView menuTV = (TextView) convertView.findViewById(R.id.textView_menu);

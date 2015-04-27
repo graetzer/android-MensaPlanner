@@ -23,6 +23,7 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -94,44 +95,43 @@ public class MealPlan {
         }
     }
 
-    //private static XPathFactory X_FACTORY = XPathFactory.newInstance();
+    XPath xPath =  XPathFactory.newInstance().newXPath();
+    DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
     private void parseData(InputStream in) throws Exception {
-        DocumentBuilderFactory builderFactory =
-                DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = builderFactory.newDocumentBuilder();
-        builder.setEntityResolver(new EntityResolver() {
-            @Override
-            public InputSource resolveEntity(String publicId, String systemId)
-                    throws SAXException, IOException {
-                if (systemId.contains("foo.dtd")) {
-                    return new InputSource(new StringReader(""));
-                } else {
-                    return null;
-                }
-            }
-        });
-
+        XPath xPath =  XPathFactory.newInstance().newXPath();
         Document document = builder.parse(in);
 
         final String weekdayIds[] = {"montag", "dienstag", "mittwoch", "donnerstag", "freitag"};
         final String nextSuffix = "Naechste";
-        //XPath xPath =  X_FACTORY.newXPath();
+        Calendar c = Calendar.getInstance();
+        todayId = Math.max(c.get(Calendar.DAY_OF_WEEK), 5) ;
 
         for (String dayId : weekdayIds) {
-            parseDayElement(document, dayId);
+            Day d = parseDayElement(document, dayId);
+            if (d != null) days.add(d);
+
         }
         for (String dayId : weekdayIds) {
-            parseDayElement(document, dayId+nextSuffix);
+            Day d = parseDayElement(document, dayId+nextSuffix);
+            if (d != null) days.add(d);
         }
-        /*String exp = "/Employees/Employee[@emplid='3333']/email";
-        Node email = (Node) xPath.compile(exp).evaluate(document, XPathConstants.NODE);*/
     }
 
-    private void parseDayElement(Document document, String dayId) {
+    private Day parseDayElement(Document document, String dayId) throws XPathExpressionException {
         Day day = new Day();
-        day.name = capitalize(dayId);// Todo
+
+        String expr = String.format("//a[@data-anchor='#%s']", dayId);
+        Node node = (Node)xPath.compile(expr).evaluate(document, XPathConstants.NODE);
+        if (node instanceof Element) {
+            day.name = ((Element)node).getTextContent();
+            if (day.name != null) {
+                day.name = day.name.trim();
+            }
+        }
 
         Element el = document.getElementById(dayId);
+        if (el == null) return null;
         NodeList trs = el.getElementsByTagName("tr");
         for (int i = 0; i < trs.getLength(); i++) {
             Element tr = (Element) trs.item(i);
@@ -158,17 +158,13 @@ public class MealPlan {
             }
             day.menus.add(menu);
         }
-        days.add(day);
+        return day;
     }
 
     static {
         System.loadLibrary("HttpClient"); // Load native library at runtime
     }
     private native byte[] requestUrl(String serverhost, String path);
-
-    private String capitalize(final String line) {
-        return Character.toUpperCase(line.charAt(0)) + line.substring(1);
-    }
 
     private String sanitize(String in) {
         return in != null ? in.trim() : "";
