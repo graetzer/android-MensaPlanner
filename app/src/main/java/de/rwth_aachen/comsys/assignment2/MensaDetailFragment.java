@@ -4,6 +4,7 @@ import android.app.Fragment;
 import android.app.ListFragment;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.view.PagerAdapter;
@@ -182,6 +183,11 @@ public class MensaDetailFragment extends Fragment {
             categoryTV.setText(m.category);
             menuTV.setText(m.title);
             priceTV.setText(format.format(m.price));
+
+            if(position % 2 == 0)
+                convertView.setBackgroundColor(0);
+            else
+                convertView.setBackgroundColor(Color.argb(0X66, 0xBB, 0xBB, 0xBB));
 
             return convertView;
         }

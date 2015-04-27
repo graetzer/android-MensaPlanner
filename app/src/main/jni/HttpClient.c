@@ -132,9 +132,10 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	int requestLen = asprintf(&request,
 	"GET %s HTTP/1.1\r\n"
 	"Host: %s\r\n"
-	"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:37.0) Gecko/20100101 Firefox/37.0\r\n"// Just because
+	"Accept: */*\r\n"
 	"Connection: close\r\n"// we don't do keep-alive
 	//"Accept-Encoding: gzip\r\n"
+	//"TE: chunked;q=0\r\n"
 	"\r\n",// empty line marks end
 	path, host);
 	if(requestLen == -1) { // print user-friendly message on error
@@ -177,9 +178,9 @@ bool ParseHeader(uint8_t *buffer, uint8_t bufferLength, http_header* header) {
         if (!lineEnd) break;// Shouldn't happen
         parserPointer = lineEnd + 2;//skip CRLF
 
-        const char* http = "HTTP/1.1";
+        const char* http = "HTTP/1.";
         if ((pch = strstr(lineBegin, http)) != 0) {// Looking for: "HTTP/1.1 200 OK"
-            header->status = atol(pch + strlen(http)+1);
+            header->status = atol(pch + strlen(http)+2);
             debugLog("Received status code %ld", header->status);
 
         } else {
@@ -262,20 +263,23 @@ bool ReceiveResponse(int fd, http_response *response) {
     // This must hold after every request
 	if (headerReceived) {
 	    if (bytesRcvd > (size_t)header.headerLength) {// Got a body
+	        if (header.contentLength != bytesRcvd - header.headerLength) {
+                debugLog("Invalid content length\n");
+                goto error_cleanup;
+            }
+
 	        if (header.usesGzip) {
+	            debugLog("Decompressing body");
         	    header.contentLength = DecompressGzipBuffer(buffer + header.headerLength,
         	    bytesRcvd - header.headerLength,
         	    &(response->content));
+        	    debugLog("New content length %zu", header.contentLength);
 
         	    free(buffer);
         	    response->buffer = response->content;
         	} else {
         	    response->buffer = buffer;
         	    response->content = buffer + header.headerLength;
-        	    if (header.contentLength != bytesRcvd - header.headerLength) {
-        	        debugLog("Invalid content length\n");
-        	        goto error_cleanup;
-        	    }
         	}
         }
         response->header = header;

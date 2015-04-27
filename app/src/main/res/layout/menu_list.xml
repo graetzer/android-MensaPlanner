@@ -7,7 +7,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="fill"
-        android:drawSelectorOnTop="false"/>
+        android:drawSelectorOnTop="false"
+        android:layout_marginBottom="@dimen/activity_vertical_margin"
+        android:layout_marginTop="@dimen/activity_vertical_margin"/>
 
     <TextView android:id="@id/android:empty"
         android:layout_width="wrap_content"
