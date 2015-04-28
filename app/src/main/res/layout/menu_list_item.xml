@@ -22,7 +22,7 @@
             android:layout_height="wrap_content"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:text="5,00€"
-            android:textColor="#006AB0"
+            android:textColor="#00549F"
             android:textStyle="bold"
             android:id="@+id/textView_price" />
 
