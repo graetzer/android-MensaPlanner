@@ -73,8 +73,8 @@ public class MensaDetailFragment extends Fragment {
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            mProgress = ProgressDialog.show(getActivity(), "Loading the meal plan",
-                    "please wait a little...", true, false);
+            mProgress = ProgressDialog.show(getActivity(), "Pläne werden geladen",
+                    "Bitte warten", true, false);
         }
 
         @Override
