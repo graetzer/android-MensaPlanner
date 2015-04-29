@@ -4,6 +4,8 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.app.Activity;
 
+import de.rwth_aachen.comsys.assignment2.data.Mensa;
+
 
 /**
  * An activity representing a list of Mensas. This activity
@@ -50,6 +52,17 @@ public class MensaListActivity extends Activity
         }
 
         // TODO: If exposing deep links into your app, handle intents here.
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mTwoPane) {
+            MensaListFragment fragment = (MensaListFragment) getFragmentManager()
+                    .findFragmentById(R.id.mensa_list);
+            fragment.setActivatedPosition(0);
+            onMensaSelected(Mensa.ITEMS.get(0).id);
+        }
     }
 
     /**

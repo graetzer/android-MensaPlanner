@@ -100,6 +100,7 @@ public class MensaDetailFragment extends Fragment {
                 DaysPagerAdapter adapter = new DaysPagerAdapter(getActivity(), mealPlan.days);
                 ViewPager pager = (ViewPager) getView();
                 pager.setAdapter(adapter);
+                pager.setCurrentItem(mealPlan.todayId);
             }
         }
     }
@@ -182,7 +183,8 @@ public class MensaDetailFragment extends Fragment {
             MealPlan.Menu m = mMenus.get(position);
             categoryTV.setText(m.category);
             menuTV.setText(m.title);
-            priceTV.setText(format.format(m.price));
+            if (m.price > 0) priceTV.setText(format.format(m.price));
+            else priceTV.setText("");
 
             if(position % 2 == 0)
                 convertView.setBackgroundColor(0);

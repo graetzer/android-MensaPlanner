@@ -109,12 +109,12 @@ public class MealPlan {
 
         for (String dayId : weekdayIds) {
             Day d = parseDayElement(document, dayId);
-            if (d != null) days.add(d);
+            if (d != null && d.menus.size() > 0) days.add(d);
 
         }
         for (String dayId : weekdayIds) {
             Day d = parseDayElement(document, dayId+nextSuffix);
-            if (d != null) days.add(d);
+            if (d != null && d.menus.size() > 0) days.add(d);
         }
     }
 
@@ -146,6 +146,7 @@ public class MealPlan {
                         menu.category = sanitize(td.getTextContent());
                         break;
                     case "menue":
+                    case "extra":
                         menu.title = sanitize(td.getTextContent());
                         break;
                     case "price":

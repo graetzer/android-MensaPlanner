@@ -1,6 +1,8 @@
 package de.rwth_aachen.comsys.assignment2;
 
 import android.app.Activity;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.app.ListFragment;
 import android.view.View;
@@ -54,7 +56,7 @@ public class MensaListFragment extends ListFragment {
         // TODO: replace with a real list adapter.
         setListAdapter(new ArrayAdapter<Mensa>(
                 getActivity(),
-                android.R.layout.simple_list_item_activated_1,
+                R.layout.simple_list_item_activated_1,
                 android.R.id.text1,
                 Mensa.ITEMS));
     }
@@ -63,12 +65,14 @@ public class MensaListFragment extends ListFragment {
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        getListView().setBackgroundColor(Color.parseColor("#2F2F2F"));
+        getListView().setDivider(new ColorDrawable(Color.parseColor("#3F3F3F")));
+        getListView().setDividerHeight(2);
+
         // Restore the previously serialized activated item position.
         if (savedInstanceState != null
                 && savedInstanceState.containsKey(STATE_ACTIVATED_POSITION)) {
             setActivatedPosition(savedInstanceState.getInt(STATE_ACTIVATED_POSITION));
-        } else {
-            setActivatedPosition(0);
         }
     }
 
@@ -122,7 +126,7 @@ public class MensaListFragment extends ListFragment {
                 : ListView.CHOICE_MODE_NONE);
     }
 
-    private void setActivatedPosition(int position) {
+    public void setActivatedPosition(int position) {
         if (position == ListView.INVALID_POSITION) {
             getListView().setItemChecked(mActivatedPosition, false);
         } else {
