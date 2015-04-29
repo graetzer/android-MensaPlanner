@@ -92,7 +92,7 @@ size_t DecompressGzipBuffer(uint8_t *inData, size_t inLength, uint8_t** outBuffe
 struct addrinfo *ResolveHost(const char *server, const char *port) {
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_UNSPEC; // we don't care about ipv4 or ipv6
+	hints.ai_family = AF_INET; // ipv4 please
 	hints.ai_socktype = SOCK_STREAM; // request TCP
 
 	struct addrinfo *result = 0;
@@ -158,7 +158,7 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
     //debugLog("Sending Message:\n%s", request);
 
 	if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-		debugLog("error connect\n");
+		debugLog("error connect: %s\n", strerror(errno));
 		return -1;
 	}
 	ssize_t result = 0, total = 0;
