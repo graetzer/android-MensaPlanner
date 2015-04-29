@@ -45,31 +45,43 @@ size_t DecompressGzipBuffer(uint8_t *inData, size_t inLength, uint8_t** outBuffe
     z_stream strm; strm.next_in = (Bytef *)inData; strm.avail_in = inLength;
     strm.total_out = 0; strm.zalloc = Z_NULL; strm.zfree = Z_NULL;
 
-    if (inflateInit2(&strm, (15+32)) != Z_OK) return 0;
+    if (inflateInit2(&strm, (15+32)) != Z_OK) {
+        debugLog("DecompressGzipBuffer: inflateInit2 is not ok\n");
+        return 0;
+    }
 
     while (!done) { // Make sure we have enough room and reset the lengths.
         if (strm.total_out >= bufferLength) {
+            debugLog("DecompressGzipBuffer: increasing buffer size\n");
             bufferLength += inLength/2;
             buffer = (uint8_t *) realloc(buffer, bufferLength);
             if (!buffer) return 0;
         }
         strm.next_out = buffer + strm.total_out;
-        strm.avail_out = inLength - strm.total_out;
+        strm.avail_out = bufferLength - strm.total_out;
 
         // Inflate another chunk.
         status = inflate (&strm, Z_SYNC_FLUSH);
         if (status == Z_STREAM_END)
             done = true;
-        else if (status != Z_OK)
+        else if (status != Z_OK) {
+            debugLog("DecompressGzipBuffer: inflate is not ok. status = %d\n", status);
             break;
+        }
     }
-    if (inflateEnd (&strm) != Z_OK) return 0;
+    if (inflateEnd (&strm) != Z_OK) {
+        debugLog("DecompressGzipBuffer: inflateEnd is not ok\n");
+        return 0;
+    }
 
         // Set real length.
     if (done) {
         *outBuffer = buffer;
         return strm.total_out;
-    } else return 0;
+    } else {
+        debugLog("DecompressGzipBuffer: Error done is false\n");
+        return 0;
+    }
 }
 
 /** @brief Resolves the given hostname/port combination
@@ -134,8 +146,9 @@ ssize_t ConnectAndSendGET(int fd, struct addrinfo *addr, const char *host, const
 	"Host: %s\r\n"
 	"Accept: */*\r\n"
 	"Connection: close\r\n"// we don't do keep-alive
+	//"TE: identity\r\n"
 	//"Accept-Encoding: gzip\r\n"
-	//"TE: chunked;q=0\r\n"
+	//"TE: trailers;q=0\r\n"
 	"\r\n",// empty line marks end
 	path, host);
 	if(requestLen == -1) { // print user-friendly message on error
@@ -269,7 +282,7 @@ bool ReceiveResponse(int fd, http_response *response) {
             }
 
 	        if (header.usesGzip) {
-	            debugLog("Decompressing body");
+	            debugLog("Try  to decompress body");
         	    header.contentLength = DecompressGzipBuffer(buffer + header.headerLength,
         	    bytesRcvd - header.headerLength,
         	    &(response->content));
