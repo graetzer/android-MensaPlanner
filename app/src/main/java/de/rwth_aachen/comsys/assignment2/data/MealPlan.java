@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -44,10 +45,10 @@ import javax.xml.xpath.XPathFactory;
  * (C) Copyright 2015 Simon Peter Grätzer
  * All rights reserved.
  */
-public class MealPlan {
+public class MealPlan implements Serializable {
     private static final String TAG = MealPlan.class.getSimpleName();
 
-    public class Day {
+    public class Day implements Serializable {
         private Pattern datePattern = Pattern.compile("([0-9][0-9])\\.([0-9][0-9])\\.([0-9][0-9][0-9][0-9])");
 
         public boolean IsToday() {
