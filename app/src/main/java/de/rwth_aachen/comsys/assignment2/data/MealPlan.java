@@ -8,30 +8,33 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.w3c.dom.ls.DOMImplementationLS;
+import org.w3c.dom.ls.LSSerializer;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.Transformer;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
@@ -45,6 +48,15 @@ public class MealPlan {
     private static final String TAG = MealPlan.class.getSimpleName();
 
     public class Day {
+        private Pattern datePattern = Pattern.compile("([0-9][0-9])\\.([0-9][0-9])\\.([0-9][0-9][0-9][0-9])");
+
+        public boolean IsToday() {
+            Calendar calendar = Calendar.getInstance();
+            String test = String.format("%02d.%02d.%04d", calendar.get(Calendar.DAY_OF_MONTH), calendar.get(Calendar.MONTH)+1, calendar.get(Calendar.YEAR));
+            Log.d(TAG, test);
+            return name.contains(test);
+        }
+
         public String name;
         public final List<Menu> menus = new ArrayList<>();
     }
@@ -104,8 +116,6 @@ public class MealPlan {
 
         final String weekdayIds[] = {"montag", "dienstag", "mittwoch", "donnerstag", "freitag"};
         final String nextSuffix = "Naechste";
-        Calendar c = Calendar.getInstance();
-        todayId = Math.max(c.get(Calendar.DAY_OF_WEEK), 5) ;
 
         for (String dayId : weekdayIds) {
             Day d = parseDayElement(document, dayId);
@@ -116,9 +126,17 @@ public class MealPlan {
             Day d = parseDayElement(document, dayId+nextSuffix);
             if (d != null && d.menus.size() > 0) days.add(d);
         }
+
+        for(Day day : days) {
+            if(!day.IsToday())
+                continue;
+
+            todayId = days.indexOf(day);
+            break;
+        }
     }
 
-    private Day parseDayElement(Document document, String dayId) throws XPathExpressionException {
+    private Day parseDayElement(Document document, String dayId) throws XPathExpressionException, TransformerConfigurationException, TransformerException {
         Day day = new Day();
 
         String expr = String.format("//a[@data-anchor='#%s']", dayId);
@@ -129,6 +147,8 @@ public class MealPlan {
                 day.name = day.name.trim();
             }
         }
+
+        Transformer transformer = TransformerFactory.newInstance().newTransformer();
 
         Element el = document.getElementById(dayId);
         if (el == null) return null;
@@ -147,7 +167,9 @@ public class MealPlan {
                         break;
                     case "menue":
                     case "extra":
-                        menu.title = sanitize(td.getTextContent());
+                        StringWriter stringWriter = new StringWriter();
+                        transformer.transform(new DOMSource(td), new StreamResult(stringWriter));
+                        menu.title = sanitize(stringWriter.toString().replace("\t", ""));
                         break;
                     case "price":
                         String in = td.getTextContent();

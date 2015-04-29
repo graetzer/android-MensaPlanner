@@ -9,6 +9,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.text.Html;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -49,6 +50,7 @@ public class MensaDetailFragment extends Fragment {
             // arguments. In a real-world scenario, use a Loader
             // to load content from a content provider.
             mMensa = Mensa.getMensaWithId(getArguments().getString(ARG_ITEM_ID));
+            getActivity().setTitle(mMensa.id);
         }
     }
 
@@ -182,7 +184,7 @@ public class MensaDetailFragment extends Fragment {
 
             MealPlan.Menu m = mMenus.get(position);
             categoryTV.setText(m.category);
-            menuTV.setText(m.title);
+            menuTV.setText(Html.fromHtml(m.title));
             if (m.price > 0) priceTV.setText(format.format(m.price));
             else priceTV.setText("");
 
