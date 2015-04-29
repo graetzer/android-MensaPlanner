@@ -125,7 +125,9 @@ public class MensaListFragment extends ListFragment {
     public void setActivatedPosition(int position) {
         if (position == ListView.INVALID_POSITION) {
             getListView().setItemChecked(mActivatedPosition, false);
+            getListView().setSelection(mActivatedPosition);
         } else {
+            getListView().setSelection(position);
             getListView().setItemChecked(position, true);
         }
         mActivatedPosition = position;
