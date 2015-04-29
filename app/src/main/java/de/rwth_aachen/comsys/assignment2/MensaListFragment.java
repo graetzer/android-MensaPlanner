@@ -65,10 +65,6 @@ public class MensaListFragment extends ListFragment {
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        getListView().setBackgroundColor(Color.parseColor("#2F2F2F"));
-        getListView().setDivider(new ColorDrawable(Color.parseColor("#3F3F3F")));
-        getListView().setDividerHeight(2);
-
         // Restore the previously serialized activated item position.
         if (savedInstanceState != null
                 && savedInstanceState.containsKey(STATE_ACTIVATED_POSITION)) {

@@ -26,7 +26,6 @@ import de.rwth_aachen.comsys.assignment2.data.MealPlan;
 import de.rwth_aachen.comsys.assignment2.data.Mensa;
 
 public class MensaDetailFragment extends Fragment {
-    private static final String TAG = MensaDetailFragment.class.getSimpleName();
     public static final String ARG_ITEM_ID = "mensa_id";
     private Mensa mMensa;
 
@@ -63,7 +62,6 @@ public class MensaDetailFragment extends Fragment {
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        ViewPager pager = (ViewPager) view;
         if (mMensa != null) {
             new MealPlanTask().execute(mMensa);
         }
@@ -81,13 +79,6 @@ public class MensaDetailFragment extends Fragment {
 
         @Override
         protected MealPlan doInBackground(Mensa... params) {
-            /*try {
-                return new MealPlan(getResources().getAssets().open("mensa.html"));
-            } catch (IOException e) {
-                Log.e(TAG, "Error while reading asset mensa.html", e);
-            }
-            return null;
-            // For testing use above code*/
             return new MealPlan(params[0].url);
         }
 

@@ -148,8 +148,6 @@ public class MealPlan {
             }
         }
 
-        Transformer transformer = TransformerFactory.newInstance().newTransformer();
-
         Element el = document.getElementById(dayId);
         if (el == null) return null;
         NodeList trs = el.getElementsByTagName("tr");
@@ -167,9 +165,7 @@ public class MealPlan {
                         break;
                     case "menue":
                     case "extra":
-                        StringWriter stringWriter = new StringWriter();
-                        transformer.transform(new DOMSource(td), new StreamResult(stringWriter));
-                        menu.title = sanitize(stringWriter.toString().replace("\t", ""));
+                        menu.title = sanitize(td.getTextContent());
                         break;
                     case "price":
                         String in = td.getTextContent();

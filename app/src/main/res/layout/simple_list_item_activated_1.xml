@@ -6,6 +6,4 @@
     android:textAppearance="?android:attr/textAppearanceListItemSmall"
     android:gravity="center_vertical"
     android:minHeight="?android:attr/listPreferredItemHeightSmall"
-    android:padding="5dp"
-    android:textColor="#FFF"
-    android:background="@drawable/list_item_back"/>
+    android:padding="5dp"/>
