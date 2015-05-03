@@ -79,7 +79,8 @@ public class MensaListActivity extends Activity
             arguments.putString(MensaDetailFragment.ARG_ITEM_ID, id);
             MensaDetailFragment fragment = new MensaDetailFragment();
             fragment.setArguments(arguments);
-            getFragmentManager().beginTransaction()
+            getFragmentManager()
+                    .beginTransaction()
                     .replace(R.id.mensa_detail_container, fragment)
                     .commit();
 
@@ -88,6 +89,22 @@ public class MensaListActivity extends Activity
             // for the selected item ID.
             Intent detailIntent = new Intent(this, MensaDetailActivity.class);
             detailIntent.putExtra(MensaDetailFragment.ARG_ITEM_ID, id);
+            startActivity(detailIntent);
+        }
+    }
+
+    @Override
+    public void onAboutSelected() {
+        if (mTwoPane) {
+            AboutFragment fragment = new AboutFragment();
+            getFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.mensa_detail_container, fragment)
+                    .commit();
+        } else {
+            // In single-pane mode, simply start the detail activity
+            // for the selected item ID.
+            Intent detailIntent = new Intent(this, AboutActivity.class);
             startActivity(detailIntent);
         }
     }

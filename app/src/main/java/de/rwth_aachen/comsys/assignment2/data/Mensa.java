@@ -26,14 +26,14 @@ public class Mensa {
     public static List<Mensa> ITEMS = new ArrayList<Mensa>();
     private static Map<String, Mensa> ITEMS_MAP = new HashMap<String, Mensa>();
     static {
-        addItem(new Mensa("Mensa Academica", "Pontwall 3", "http://www.studentenwerk-aachen.de/speiseplaene/academica-w.html"));
-        addItem(new Mensa("Mensa Ahornstraße", "Ahornstraße 55", "http://www.studentenwerk-aachen.de/speiseplaene/ahornstrasse-w.html"));
-        addItem(new Mensa("Mensa Bistro Templergraben", "Templergraben 55", "http://www.studentenwerk-aachen.de/speiseplaene/templergraben-w.html"));
-        addItem(new Mensa("Mensa Bayernallee", "Bayernallee 9", "http://www.studentenwerk-aachen.de/speiseplaene/bayernallee-w.html"));
-        addItem(new Mensa("Mensa Eupener Straße", "Eupener Straße 70", "http://www.studentenwerk-aachen.de/speiseplaene/eupenerstrasse-w.html"));
-        addItem(new Mensa("Mensa Goethestraße", "Goethestraße 3", "http://www.studentenwerk-aachen.de/speiseplaene/goethestrasse-w.html"));
-        addItem(new Mensa("Mensa Vita", "Helmertweg 1", "http://www.studentenwerk-aachen.de/speiseplaene/vita-w.html"));
-        addItem(new Mensa("Mensa Jülich", "Heinrich-Mußmann-Str. 1", "http://www.studentenwerk-aachen.de/speiseplaene/juelich-w.html"));
+        addItem(new Mensa("Mensa Academica", "Aachen Pontwall 3", "http://www.studentenwerk-aachen.de/speiseplaene/academica-w.html"));
+        addItem(new Mensa("Mensa Ahornstraße", "Aachen Ahornstraße 55", "http://www.studentenwerk-aachen.de/speiseplaene/ahornstrasse-w.html"));
+        addItem(new Mensa("Mensa Bistro Templergraben", "Aachen Templergraben 55", "http://www.studentenwerk-aachen.de/speiseplaene/templergraben-w.html"));
+        addItem(new Mensa("Mensa Bayernallee", "Aachen Bayernallee 9", "http://www.studentenwerk-aachen.de/speiseplaene/bayernallee-w.html"));
+        addItem(new Mensa("Mensa Eupener Straße", "Aachen Eupener Straße 70", "http://www.studentenwerk-aachen.de/speiseplaene/eupenerstrasse-w.html"));
+        addItem(new Mensa("Mensa Goethestraße", "Aachen Goethestraße 3", "http://www.studentenwerk-aachen.de/speiseplaene/goethestrasse-w.html"));
+        addItem(new Mensa("Mensa Vita", "Aachen Helmertweg 1", "http://www.studentenwerk-aachen.de/speiseplaene/vita-w.html"));
+        addItem(new Mensa("Mensa Jülich", "Aachen Heinrich-Mußmann-Str. 1", "http://www.studentenwerk-aachen.de/speiseplaene/juelich-w.html"));
     }
     private static void addItem(Mensa m) {
         ITEMS.add(m);

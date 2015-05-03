@@ -4,13 +4,18 @@ import android.app.Fragment;
 import android.app.ListFragment;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.text.Html;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -51,6 +56,7 @@ public class MensaDetailFragment extends Fragment {
             mMensa = Mensa.getMensaWithId(getArguments().getString(ARG_ITEM_ID));
             getActivity().setTitle(mMensa.id);
         }
+        setHasOptionsMenu(true);
     }
 
     @Override
@@ -65,6 +71,23 @@ public class MensaDetailFragment extends Fragment {
         if (mMensa != null) {
             new MealPlanTask().execute(mMensa);
         }
+    }
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        inflater.inflate(R.menu.detail, menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_map) {
+            String map = "http://maps.google.co.in/maps?q=" + mMensa.id;
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(map));
+            startActivity(i);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     private class MealPlanTask extends AsyncTask<Mensa, Void, MealPlan> {
