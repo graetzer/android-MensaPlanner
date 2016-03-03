@@ -112,7 +112,7 @@ public class MealPlan implements Serializable {
     DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
     private void parseData(InputStream in) throws Exception {
         DocumentBuilder builder = builderFactory.newDocumentBuilder();
-        XPath xPath =  XPathFactory.newInstance().newXPath();
+        //XPath xPath =  XPathFactory.newInstance().newXPath();
         Document document = builder.parse(in);
 
         final String weekdayIds[] = {"montag", "dienstag", "mittwoch", "donnerstag", "freitag"};

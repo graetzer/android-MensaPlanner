@@ -2,7 +2,7 @@
 
 https://play.google.com/store/apps/details?id=de.rwth_aachen.comsys.assignment2
 
-- Quick access to the Menus of all Dining Halls operated by the Studentenwerk Aachen
+- Quick access to the Menus of all Dining Halls operated by the studierendenwerk Aachen
 - Can provide navigation instruction to the location of the desired dining hall
 
 Developed for the Android Communication Systems Lab by Simon Grätzer & Jan Garcia.

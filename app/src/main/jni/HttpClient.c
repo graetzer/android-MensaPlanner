@@ -316,8 +316,8 @@ JNIEXPORT jbyteArray JNICALL Java_de_rwth_1aachen_comsys_assignment2_data_MealPl
     const char *cServerHost = (*env)->GetStringUTFChars(env, serverhost, 0);
     const char *cPath = (*env)->GetStringUTFChars(env, path, 0);
     //*/
-    //Testing http://www.studentenwerk-aachen.de/speiseplaene/academica-w.html
-    //const char *cServerHost = "www.studentenwerk-aachen.de";
+    //Testing http://www.studierendenwerk-aachen.de/speiseplaene/academica-w.html
+    //const char *cServerHost = "www.studierendenwerk-aachen.de";
     //const char *cPath = "/speiseplaene/academica-w.html";
 
     struct addrinfo *host = ResolveHost(cServerHost, "80"); // resolve hostname and port
