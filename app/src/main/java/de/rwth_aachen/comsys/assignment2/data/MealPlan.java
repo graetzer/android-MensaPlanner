@@ -63,7 +63,7 @@ public class MealPlan implements Serializable {
     }
 
     public class Menu {
-        public String category, title;
+        public String category = "", title = "";
         public double price;
     }
 
@@ -140,6 +140,7 @@ public class MealPlan implements Serializable {
     private Day parseDayElement(Document document, String dayId) throws XPathExpressionException, TransformerConfigurationException, TransformerException {
         Day day = new Day();
 
+        // Aquiring the date
         String expr = String.format("//a[@data-anchor='#%s']", dayId);
         Node node = (Node)xPath.compile(expr).evaluate(document, XPathConstants.NODE);
         if (node instanceof Element) {
@@ -151,29 +152,30 @@ public class MealPlan implements Serializable {
 
         Element el = document.getElementById(dayId);
         if (el == null) return null;
-        NodeList trs = el.getElementsByTagName("tr");
-        for (int i = 0; i < trs.getLength(); i++) {
-            Element tr = (Element) trs.item(i);
-            NodeList tds = tr.getElementsByTagName("td");
+        NodeList tds = el.getElementsByTagName("td");
+
+        //NodeList tds = (NodeList)xPath.compile("//td[@class='menue-wrapper']")
+        //        .evaluate(el, XPathConstants.NODESET);
+        if (tds == null) return null;
+
+        for (int i = 0; i < tds.getLength(); i++) {
+            NodeList spans = ((Element)tds.item(i)).getElementsByTagName("span");
+            if (spans == null) continue;
 
             MealPlan.Menu menu = new Menu();
-            for (int x = 0; x < tds.getLength(); x++) {
-                Element td = (Element) tds.item(x);
-                String type = td.getAttribute("class");
-                switch (type) {
-                    case "category":
-                        menu.category = sanitize(td.getTextContent());
-                        break;
-                    case "menue":
-                    case "extra":
-                        menu.title = sanitize(td.getTextContent());
-                        break;
-                    case "price":
-                        String in = td.getTextContent();
-                        in = in.replace('€', ' ');
-                        in = in.replace(',', '.');
-                        menu.price = Double.parseDouble(in);
-                        break;
+            for (int x = 0; x < spans.getLength(); x++) {
+                Element span = (Element) spans.item(x);
+                String type = span.getAttribute("class");
+
+                if (type != null && type.contains("menue-category")) {
+                    menu.category = sanitize(span.getTextContent());
+                } else if (type != null && type.contains("menue-desc")) {
+                    menu.title = sanitize(span.getTextContent());
+                } else if (type != null && type.contains("menue-price")) {
+                    String in = span.getTextContent();
+                    in = in.replace('€', ' ');
+                    in = in.replace(',', '.');
+                    menu.price = Double.parseDouble(in);
                 }
             }
             day.menus.add(menu);
